@@ -6,11 +6,11 @@ DrawPolygon :: (vertices: [] Vector2, color := WHITE) {
     for j: 1..vertices.count - 2 {
         k := (j + 1) % vertices.count;
 
-        vi := TransformVertex(vertices[0], transform);
-        vj := TransformVertex(vertices[j], transform);
-        vk := TransformVertex(vertices[k], transform);
+        v0 := TransformVertex(vertices[0], transform);
+        v1 := TransformVertex(vertices[j], transform);
+        v2 := TransformVertex(vertices[k], transform);
 
-        Simp.immediate_triangle(.{ vi.x, vi.y, 0 }, .{ vj.x, vj.y, 0 }, .{ vk.x, vk.y, 0 }, color, color, color);
+        Simp.immediate_triangle(.{ v0.x, v0.y, 0 }, .{ v1.x, v1.y, 0 }, .{ v2.x, v2.y, 0 }, color, color, color);
     }
 }
 
@@ -81,16 +81,9 @@ DrawEllipseLine :: (center: Vector2, w: float, h: float, color := WHITE, width :
     DrawPolygonLine(vertices, color, width);
 }
 
-Horizontal_Align :: enum {
-    LEFT;
-    RIGHT;
-    CENTER;
-}
-
-Vertical_Align :: enum {
-    TOP;
-    BOTTOM;
-    CENTER;
+Align :: struct {
+    v: enum { TOP; BOTTOM; CENTER; } = .TOP;
+    h: enum { LEFT; RIGHT; CENTER; } = .LEFT;
 }
 
 Flip_Flag :: enum_flags {
@@ -99,19 +92,19 @@ Flip_Flag :: enum_flags {
     VERTICAL;
 }
 
-DrawText :: (font: *Simp.Dynamic_Font, text: string, position: Vector2, color := WHITE, vertical_align := Vertical_Align.TOP, horizontal_align := Horizontal_Align.LEFT, effects : Simp.Font_Effects = 0) {
+DrawText :: (font: *Simp.Dynamic_Font, text: string, position: Vector2, color := WHITE, align := Align.{ .TOP, .LEFT }, effects : Simp.Font_Effects = 0) {
     w := Simp.prepare_text(font, text);
     h := font.character_height / 2.0;
     x : float;
     y : float;
 
-    if horizontal_align == {
+    if align.h == {
         case .LEFT;    x = position.x;
         case .RIGHT;   x = position.x - w;
         case .CENTER;  x = position.x - w / 2.0;
     }
 
-    if vertical_align == {
+    if align.v == {
         case .BOTTOM;  y = position.y;
         case .TOP;     y = position.y + h;
         case .CENTER;  y = position.y + h / 2.0;
@@ -131,23 +124,23 @@ DrawText :: (font: *Simp.Dynamic_Font, text: string, position: Vector2, color :=
     Simp.draw_generated_quads(font, color);
 }
 
-DrawCenteredText :: (font: *Simp.Dynamic_Font, text: string, position: Vector2, color := WHITE, effects : Simp.Font_Effects = 0) {
-    DrawText(font, text, position, color, .CENTER, .CENTER, effects);
+DrawTextCentered :: (font: *Simp.Dynamic_Font, text: string, position: Vector2, color := WHITE, effects : Simp.Font_Effects = 0) {
+    DrawText(font, text, position, color, .{ .CENTER, .CENTER }, effects);
 }
 
-DrawTexture :: (texture: Simp.Texture, position: Vector2, color := WHITE, flip := Flip_Flag.NONE, vertical_align := Vertical_Align.TOP, horizontal_align := Horizontal_Align.LEFT) {
+DrawTexture :: (texture: Simp.Texture, position: Vector2, color := WHITE, flip := Flip_Flag.NONE, align := Align.{ .TOP, .LEFT }) {
     w := cast(float) texture.width;
     h := cast(float) texture.height;
     x : float;
     y : float;
 
-    if horizontal_align == {
+    if align.h == {
         case .LEFT;    x = position.x;
         case .RIGHT;   x = position.x - w;
         case .CENTER;  x = position.x - w / 2.0;
     }
 
-    if vertical_align == {
+    if align.v == {
         case .TOP;     y = position.y;
         case .BOTTOM;  y = position.y - h;
         case .CENTER;  y = position.y - h / 2.0;
@@ -194,39 +187,52 @@ DrawTexture :: (texture: Simp.Texture, rectangle: Rectangle, color := WHITE, fli
     Simp.immediate_quad(p0, p1, p2, p3, color);
 }
 
-DrawCenteredTexture :: (texture: Simp.Texture, position: Vector2, color := WHITE, flip := Flip_Flag.NONE) {
-    DrawTexture(texture, position, color, flip, .CENTER, .CENTER);
+DrawTextureCentered :: (texture: Simp.Texture, position: Vector2, color := WHITE, flip := Flip_Flag.NONE) {
+    DrawTexture(texture, position, color, flip, .{ .CENTER, .CENTER });
+}
+
+DrawAnimation :: (using animation: Animation, position: Vector2, color := WHITE, flip := Flip_Flag.NONE, align := Align.{ .TOP, .LEFT }) {
+	DrawTexture(frames[index].texture, position, color, flip, align);
+}
+
+DrawAnimation :: (using animation: Animation, rectangle: Rectangle, color := WHITE, flip := Flip_Flag.NONE) {
+	DrawTexture(frames[index].texture, rectangle, color, flip);
+}
+
+DrawAnimationCentered :: (using animation: Animation, position: Vector2, color := WHITE, flip := Flip_Flag.NONE) {
+	DrawTexture(frames[index].texture, position, color, flip, .{ .CENTER, .CENTER });
 }
 
 Transform :: struct {
     translation : Vector2;
     rotation    : float;
-    scale       : float;
+    scale       := 1.0;
 }
 
 transforms: [..] Transform;
 
-TransformVertex :: (vertex: Vector2, using transform: Transform) -> Vector2 #expand {
-    return rotate(vertex, rotation) * scale + translation;
+TransformVertex :: (vertex: Vector2, matrix: Matrix4) -> Vector2 #expand {
+    v := matrix * Vector4.{ vertex.x, vertex.y, 0.0, 1.0 } ;
+    return .{ v.x, v.y };
 }
 
 PushTransform :: (transform: Transform) {
     array_add(*transforms, transform);
 }
 
-PushTranlation :: (offset: Vector2) {
+PushTranlation :: (tra: Vector2) {
     transform := array_add(*transforms);
-    transform.translation = offset;
+    transform.translation = tra;
 }
 
-PushRotation :: (angle: float) {
+PushRotation :: (rot: float) {
     transform := array_add(*transforms);
-    transform.rotation = angle;
+    transform.rotation = rot;
 }
 
-PushScale :: (scale: float) {
+PushScale :: (sca: float) {
     transform := array_add(*transforms);
-    transform.scale = scale;
+    transform.scale = sca;
 }
 
 PopTransform :: () {
@@ -234,46 +240,50 @@ PopTransform :: () {
 }
 
 PushTransformThisScope :: (transform: Transform) #expand {
-    `PushTransform(transform);
+    PushTransform(transform);
     `defer PopTransform();
 }
 
-PushTranslationThisScope :: (offset: Vector2) #expand {
-    `PushTranlation(offset);
+PushTranslationThisScope :: (translation: Vector2) #expand {
+    PushTranlation(translation);
     `defer PopTransform();
 }
 
 PushRotationThisScope :: (angle: float) #expand {
-    `PushRotation(angle);
+    PushRotation(angle);
     `defer PopTransform();
 }
 
 PushScaleThisScope :: (scale: float) #expand {
-    `PushScale(scale);
+    PushScale(scale);
     `defer PopTransform();
 }
 
-GetCurrentTransform :: () -> Transform {
-    current: Transform;
-    current.scale = 1.0;
+GetCurrentTransform :: () -> Matrix4 {
+    result := Matrix4_Identity;
 
     for transforms {
-        current.translation += it.translation;
-        current.rotation    += it.rotation;
-        current.scale       += it.scale;
+        result *= TransformToMatrix4(it);
     }
 
-    return current;
+    return result;
 }
 
-WHITE  :: Vector4.{ 1., 1., 1., 1. };
-BLACK  :: Vector4.{ 0., 0., 0., 1. };
-RED    :: Vector4.{ .9, .1, .2, 1. };
-GREEN  :: Vector4.{ 0., .8, .1, 1. };
-BLUE   :: Vector4.{ 0., .4, .9, 1. };
-YELLOW :: Vector4.{ .9, .9, 0., 1. };
-PINK   :: Vector4.{ 1., .4, .7, 1. };
-ORANGE :: Vector4.{ 1., .6, 0., 1. };
-BROWN  :: Vector4.{ .4, .4, .3, 1. };
+TransformToMatrix4 :: (using transform: Transform) -> Matrix4 {
+    result := Matrix4_Identity;
+
+    c := scale * cos(rotation);
+    s := scale * sin(rotation);
+
+    result.floats[0] = c;
+    result.floats[1] = -s;
+    result.floats[3] = translation.x;
+
+    result.floats[4] = s;
+    result.floats[5] = c;
+    result.floats[7] = translation.y;
+
+    return result;
+}
 
 POINTS_PER_CIRCLE :: 50;

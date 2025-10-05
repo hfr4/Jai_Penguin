@@ -1,23 +1,28 @@
 Animation :: struct {
-    frames:  [..] *Simp.Texture;
+    frames:  [..] Frame;
     index:   int;
-    fps:     float;
     elapsed: float;
 }
 
-Init :: (animation: *Animation, fps: float, frames: [] *Simp.Texture) {
-    animation.fps = fps;
-    for frames  array_add(*animation.frames, it);
+Frame :: struct {
+    texture:  *Simp.Texture;
+    duration: float;
+}
+
+InitAnimation :: (name: string, frames: [] Frame) {
+    if !table_find_pointer(*animations, name) {
+        animation: Animation;
+        array_copy(*animation.frames, frames);
+        table_add(*animations, name, animation);
+    }
 }
 
 Update :: (using animation: *Animation, dt: float) {
     elapsed += dt;
 
-    if elapsed >= 1.0 / fps  {
+    if elapsed >= frames[index].duration {
         elapsed = 0.0;
-
-        index += 1;
-        index %= frames.count;
+        index   = (index + 1) % frames.count;
     }
 }
 
@@ -26,18 +31,12 @@ Reset :: (using animation: *Animation) {
     elapsed = 0.0;
 }
 
-DrawAnimation :: (using animation: Animation, position: Vector2, color := WHITE, flip := Flip_Flag.NONE, vertical_align := Vertical_Align.TOP, horizontal_align := Horizontal_Align.LEFT) {
-	DrawTexture(frames[index], position, color, flip, vertical_align, horizontal_align);
-}
-
-DrawCenteredAnimation :: (using animation: Animation, position: Vector2, color := WHITE, flip := Flip_Flag.NONE) {
-	DrawTexture(frames[index], position, color, flip, .CENTER, .CENTER);
-}
-
-animations: Table(string, Animation);
-
 GetAnimation :: (name: string) -> *Animation {
     animation := table_find_pointer(*animations, name);
     assert(animation != null, "Can't find animation called : %", name);
     return animation;
 }
+
+#scope_file
+
+animations: Table(string, Animation);

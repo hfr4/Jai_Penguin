@@ -13,9 +13,9 @@ main :: () {
     last_time := seconds_since_init();
 
     while !QUIT_GAME {
-        now := seconds_since_init();
-        dt  := now - last_time;
-        last_time = now;
+        current_time := seconds_since_init();
+        dt := current_time - last_time;
+        last_time = current_time;
 
         Input.update_window_events();
 
@@ -42,21 +42,24 @@ main :: () {
 
         Sound.update();
 
-        RenderGame();
-
-        Simp.set_render_target(WINDOW, .LEFT_HANDED);
-        Simp.clear_render_target(0, 0, 0, 1);
-
-        Simp.set_shader_for_images(*GAME);
-        tl := Center(WindowRectangle()) - Center(GameRectangle()) * AspectRatio();
-        br := Center(WindowRectangle()) + Center(GameRectangle()) * AspectRatio();
-        Simp.immediate_quad(tl.x, tl.y, br.x, br.y, WHITE);
-
-        Simp.swap_buffers(WINDOW);
+        GameRender();
+        WindowRender();
 
         reset_temporary_storage();
         sleep_milliseconds(10);
     }
+}
+
+WindowRender :: () {
+    Simp.set_render_target(WINDOW, .LEFT_HANDED);
+    Simp.clear_render_target(0, 0, 0, 1);
+
+    Simp.set_shader_for_images(*GAME);
+    tl := Center(WindowRectangle()) - Center(GameRectangle()) * AspectRatio();
+    br := Center(WindowRectangle()) + Center(GameRectangle()) * AspectRatio();
+    Simp.immediate_quad(tl.x, tl.y, br.x, br.y, WHITE);
+
+    Simp.swap_buffers(WINDOW);
 }
 
 WindowRectangle :: () -> Rectangle {
@@ -146,9 +149,9 @@ TIME_STEP := 1 / 60.0;
 #load "tween.jai";
 #load "draw.jai";
 #load "animation.jai";
-#load "rectangle.jai";
-#load "circle.jai";
-#load "segment.jai";
+#load "shapes.jai";
+#load "colors.jai";
+#load "particles.jai";
 
 #import "Basic";
 #import "Math";

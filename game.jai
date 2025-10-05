@@ -90,6 +90,14 @@ HandleGameInputs :: () {
 }
 
 UpdateGame :: (dt: float) {
+    for * particle_emitters {
+        Update(it, dt);
+
+        if it.producing == false && it.particles.count == 0 {
+            remove it;
+        }
+    }
+
     // Float power up, don't update while relaunching
     if penguin.is_floating && penguin.state != .RELAUNCH {
         penguin.float_timer -= 1;
@@ -132,7 +140,7 @@ UpdateGame :: (dt: float) {
 
         // Glide
         if penguin.is_gliding {
-            penguin.velocity.y   -= GLIDE_LIFT_POWER;
+            penguin.velocity.y    -= GLIDE_LIFT_POWER;
             penguin.glide_stamina -= GLIDE_STAMINA_DEPLETION_RATE;
 
             if penguin.glide_stamina <= 0 {
@@ -149,12 +157,22 @@ UpdateGame :: (dt: float) {
         if penguin.position.y + penguin.radius >= GROUND_Y {
             penguin.position.y = GROUND_Y - penguin.radius;
 
-            if abs(penguin.velocity.y) > MIN_BOUNCE_VY {
+            if abs(penguin.velocity.y) > MIN_BOUNCE_VELOCITY {
                 penguin.velocity.x *= (FRICTION + BOUNCE_DAMPING) / 2;
                 penguin.velocity.y *= -BOUNCE_DAMPING;
 
                 penguin.is_bouncing  = true;
                 penguin.bounce_timer = BOUNCE_DURATION;
+
+                // Ground particle
+                e := array_add(*particle_emitters);
+                e.texture   = GetTexture("default");
+                e.min_color = WHITE;
+                e.max_color = WHITE;
+                e.position  = penguin.position;
+                e.speed     = .{ 200 , 300 };
+                e.lifetime  = .1;
+                e.particles_per_second = 200;
             } else {
                 penguin.velocity.y = 0;
                 if abs(penguin.velocity.x) > MIN_SLIDE_SPEED {
@@ -194,7 +212,7 @@ UpdateGame :: (dt: float) {
     }
 }
 
-RenderGame :: () {
+GameRender :: () {
     Simp.set_render_target(*GAME, .LEFT_HANDED);
     Simp.clear_render_target(0, 0, 0, 1);
 
@@ -285,41 +303,12 @@ RenderGame :: () {
                     DrawEllipse(.{ 0.0, 0.0 }, it.circle.r * 0.7, it.circle.r, .{ 96 / 255.0, 165 / 255.0, 250 / 255.0, 1.0 });
 
                 case .LAUNCH_CHARGE;
-                    outer_radius := it.circle.r;
-                    inner_radius := it.circle.r / 2.0;
-                    angle        := PI / 2.0 * 3.0;
+                    t : Transform;
+                    t.translation = Center(it.circle);
+                    t.scale       = 1.5;
+                    PushTransformThisScope(t);
 
-                    inner_vertices: [5] Vector2;
-                    outer_vertices: [5] Vector2;
-
-                    for i: 0..4 {
-                        outer_vertices[i] = .{ it.rectangle.x + cos(angle) * outer_radius, it.rectangle.y + sin(angle) * outer_radius };
-                        angle += PI / 5.0;
-
-                        inner_vertices[i] = .{ it.rectangle.x + cos(angle) * inner_radius, it.rectangle.y + sin(angle) * inner_radius };
-                        angle += PI / 5.0;
-                    }
-
-                    inner_color := Vector4.{ 250 / 255.0, 204 / 255.0, 21 / 255.0, 1.0 };
-                    outer_color := Vector4.{ 161 / 255.0, 98  / 255.0, 7  / 255.0, 1.0 };
-
-                    DrawPolygon(inner_vertices, inner_color);
-                    DrawPolygon(.[ inner_vertices[4], outer_vertices[0], inner_vertices[0] ], inner_color);
-                    DrawPolygon(.[ inner_vertices[0], outer_vertices[1], inner_vertices[1] ], inner_color);
-                    DrawPolygon(.[ inner_vertices[1], outer_vertices[2], inner_vertices[2] ], inner_color);
-                    DrawPolygon(.[ inner_vertices[2], outer_vertices[3], inner_vertices[3] ], inner_color);
-                    DrawPolygon(.[ inner_vertices[3], outer_vertices[4], inner_vertices[4] ], inner_color);
-
-                    DrawSegment(.{ outer_vertices[0], inner_vertices[0] }, outer_color, 2.0);
-                    DrawSegment(.{ inner_vertices[0], outer_vertices[1] }, outer_color, 2.0);
-                    DrawSegment(.{ outer_vertices[1], inner_vertices[1] }, outer_color, 2.0);
-                    DrawSegment(.{ inner_vertices[1], outer_vertices[2] }, outer_color, 2.0);
-                    DrawSegment(.{ outer_vertices[2], inner_vertices[2] }, outer_color, 2.0);
-                    DrawSegment(.{ inner_vertices[2], outer_vertices[3] }, outer_color, 2.0);
-                    DrawSegment(.{ outer_vertices[3], inner_vertices[3] }, outer_color, 2.0);
-                    DrawSegment(.{ inner_vertices[3], outer_vertices[4] }, outer_color, 2.0);
-                    DrawSegment(.{ outer_vertices[4], inner_vertices[4] }, outer_color, 2.0);
-                    DrawSegment(.{ inner_vertices[4], outer_vertices[0] }, outer_color, 2.0);
+                    DrawTextureCentered(GetTexture("star"), .{ 0, 0 });
 
                 case .GLIDE_REFILL;
                     DrawCircle(it.circle, .{ 1.0, 0.0, 1.0, 1.0 });
@@ -430,6 +419,11 @@ RenderGame :: () {
             DrawCircle(.{ penguin.position.x, 55, 30 });
             DrawPenguin(.{ penguin.position.x, 55 });
         }
+
+        // Particles
+        {
+            for particle_emitters Draw(it);
+        }
     }
 
     // Ui
@@ -460,8 +454,8 @@ RenderGame :: () {
 
             {
                 PushTranslationThisScope(Center(GameRectangle()));
-                DrawCenteredText(GetFont("default", 48), "Replay ?", .{ -5.0, -5.0 }, RED);
-                DrawCenteredText(GetFont("default", 48), "Replay ?", .{  0.0,  0.0 }, color);
+                DrawTextCentered(GetFont("default", 48), "Replay ?", .{ -5.0, -5.0 }, RED);
+                DrawTextCentered(GetFont("default", 48), "Replay ?", .{  0.0,  0.0 }, color);
             }
         }
 
@@ -471,14 +465,14 @@ RenderGame :: () {
 
             {
                 PushTranslationThisScope(.{ 10, 24 });
-                DrawText(GetFont("default", 24), tprint("Score : %", score), .{ -2.0, -2.0 }, RED  , .TOP, .LEFT);
-                DrawText(GetFont("default", 24), tprint("Score : %", score), .{  0.0,  0.0 }, color, .TOP, .LEFT);
+                DrawText(GetFont("default", 24), tprint("Score : %", score), .{ -2.0, -2.0 }, RED  , .{ .TOP, .LEFT });
+                DrawText(GetFont("default", 24), tprint("Score : %", score), .{  0.0,  0.0 }, color, .{ .TOP, .LEFT });
             }
 
             {
                 PushTranslationThisScope(.{ GameRectangle().w - 10, 24 });
-                DrawText(GetFont("default", 24), tprint("HiScore : %", high_score), .{ -2.0, -2.0 }, RED  , .TOP, .RIGHT);
-                DrawText(GetFont("default", 24), tprint("HiScore : %", high_score), .{  0.0,  0.0 }, color, .TOP, .RIGHT);
+                DrawText(GetFont("default", 24), tprint("HiScore : %", high_score), .{ -2.0, -2.0 }, RED  , .{ .TOP, .RIGHT });
+                DrawText(GetFont("default", 24), tprint("HiScore : %", high_score), .{  0.0,  0.0 }, color, .{ .TOP, .RIGHT });
             }
         }
 
@@ -492,7 +486,7 @@ RenderGame :: () {
             r := Rectangle.{ x, y, w, h };
 
             DrawRectangle(r, .{ 1, 1, 0, 1 });
-            DrawCenteredText(GetFont("default", 16), tprint("Relaunch x%", penguin.launch_charges), Center(r), BLACK);
+            DrawTextCentered(GetFont("default", 16), tprint("Relaunch x%", penguin.launch_charges), Center(r), BLACK);
         }
     }
 }
@@ -608,7 +602,7 @@ ResolveCollisions :: () {
                 case .FLOAT;
                     penguin.is_floating = true;
                     penguin.float_timer = FLOAT_DURATION;
-                    gravity            = BASE_GRAVITY * FLOAT_GRAVITY_MULTIPLIER;
+                    gravity             = BASE_GRAVITY * FLOAT_GRAVITY_MULTIPLIER;
 
                 case .LAUNCH_CHARGE;
                     penguin.launch_charges += 1;
@@ -658,6 +652,7 @@ angle_indicator: struct {
 obstacles:          [..] Obstacle;
 powerups:           [..] Power_Up;
 background_objects: [..] Background_Object;
+particle_emitters:  [..] Particle_Emitter;
 
 camera: Vector2;
 
@@ -686,7 +681,7 @@ ANGLE_SPEED  :: 1  * (PI / 180);
 FRICTION        :: 0.985;
 BOUNCE_DAMPING  :: 0.6;
 MIN_SLIDE_SPEED :: 0.1;
-MIN_BOUNCE_VY   :: 1.0;
+MIN_BOUNCE_VELOCITY :: 1.0;
 
 FLOAT_DURATION           :: 180;
 FLOAT_GRAVITY_MULTIPLIER :: 0.3;
